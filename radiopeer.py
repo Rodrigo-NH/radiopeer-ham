@@ -7,6 +7,7 @@ import socket
 import struct
 import threading
 import curses
+import atexit
 
 try:
     import RPi.GPIO as gpio
@@ -361,3 +362,9 @@ class radiopeer():
     def close(self):
         audiodev.close()
         self._loopthread = False
+        
+    @atexit.register
+    def _results():
+        print ("EXIT")
+        curses.endwin()
+        
