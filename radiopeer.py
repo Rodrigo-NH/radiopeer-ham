@@ -61,13 +61,13 @@ class radiopeer():
         self.pttpin = 0
         self._soundbuff = []
         self._databuff = []
+        self._gateip = None
 
     def startout(self):
         self._loopthread = True
         self.__ctrdev(1)
         self._stdscr.nodelay(1)
         self.__raspberryconf()
-        #self._stdscr.timeout(0)
         self._sockin.bind((self._thispeer_ipin, self._thispeer_portin))
         g = threading.Thread(target=self.__getpacks, args=())
         g.setDaemon(True)
@@ -81,6 +81,24 @@ class radiopeer():
         y = threading.Thread(target=self.__getkeyboard, args=())
         y.setDaemon(True)
         y.start()
+        if self._gateip != None:
+            v = threading.Thread(target=self.__sndip2gate, args=())
+            v.setDaemon(True)
+            v.start()
+
+    def __sndip2gate(self):
+        while self._loopthread == True:
+            data = 'HELLO GATE-'
+            if self._isbase == True:
+                data = data + 'BASE'
+            else:
+                data = data + 'REMOTE'
+            data = data.encode('utf-8')
+            self._sockout.sendto(data, (self._gateip, self._to_peer_port))
+            time.sleep(10)
+
+    def gateip(self, gateip):
+        self._gateip = gateip
 
     def getcardinfo(self):
         d1 = audiodev.get_api_name()
@@ -248,11 +266,12 @@ class radiopeer():
                     pttstate = 0
                 self._squeue.append(pttstate)
                 self._squeue.append(self._packlag)
-
-                packer = struct.Struct('38s ' * 26 + 'I' + 'I' + 'I')
-                packed_data = packer.pack(*self._squeue)
-                #self._sockout.sendto(packed_data, ("10.10.0.4", self._to_peer_port))
-                self._sockout.sendto(packed_data, (self._peerip, self._to_peer_port))
+                try:
+                    packer = struct.Struct('38s ' * 26 + 'I' + 'I' + 'I')
+                    packed_data = packer.pack(*self._squeue)
+                    self._sockout.sendto(packed_data, (self._peerip, self._to_peer_port))
+                except:
+                    pass
                 self._squeue = []
                 if self._statsndpack == " ":
                     self._statsndpack = "X"
@@ -274,19 +293,22 @@ class radiopeer():
 
     def __getpacks(self):
         while self._loopthread == True:
-            data, addr = self._sockin.recvfrom(1024)  # buffer size is 1024 bytes
-            self._stimeout = int(time.time())
-            if self._peerip is None:
-                self._peerip = addr[0]
-            unpacker = struct.Struct('38s ' * 26 + 'I' + 'I' + 'I')
-            ntq = unpacker.unpack(data)
-            for fragment in ntq:
-                self._rqueue.append(fragment)
-            self.__packprocs()
-            if self._statrecvpack == " ":
-                self._statrecvpack = "X"
-            else:
-                self._statrecvpack = " "
+            try:
+                data, addr = self._sockin.recvfrom(1024)  # buffer size is 1024 bytes
+                self._stimeout = int(time.time())
+                if self._peerip is None:
+                    self._peerip = addr[0]
+                unpacker = struct.Struct('38s ' * 26 + 'I' + 'I' + 'I')
+                ntq = unpacker.unpack(data)
+                for fragment in ntq:
+                    self._rqueue.append(fragment)
+                self.__packprocs()
+                if self._statrecvpack == " ":
+                    self._statrecvpack = "X"
+                else:
+                    self._statrecvpack = " "
+            except:
+                pass
 
     def __ctrdev(self, ct):
         if ct == 1:
