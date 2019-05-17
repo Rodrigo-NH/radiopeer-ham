@@ -388,5 +388,7 @@ class radiopeer():
     @atexit.register
     def _results():
         print ("EXIT")
+        gpio.output(self.pttpin, False)
+        gpio.cleanup()
         curses.endwin()
         
